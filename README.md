@@ -158,3 +158,18 @@ To use the content moderation and admin panel features, you need to designate a 
     -   The frontend will now be running, typically on `http://localhost:5173`.
 
 **You're all set!** Open `http://localhost:5173` in your browser to use the application.
+
+
+
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td><img src="screenshots/screen1.png" width="300"/></td>
+    <td><img src="screenshots/screen2.png" width="300"/></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/screen3.png" width="300"/></td>
+    <td><img src="screenshots/screen4.png" width="300"/></td>
+  </tr>
+</table>
