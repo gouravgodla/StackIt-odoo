@@ -4,13 +4,15 @@ import { Routes, Route, Link, NavLink, useNavigate } from 'react-router-dom';
 import { HomePage } from './components/HomePage';
 import { QuestionPage } from './components/QuestionPage';
 import { AskQuestionPage } from './components/AskQuestionPage';
-import { LogoIcon, BellIcon, SearchIcon } from './components/icons';
+import { AdminPage } from './components/AdminPage'; // Import AdminPage
+import { LogoIcon, BellIcon, SearchIcon, ShieldCheckIcon } from './components/icons';
 import { SignInButton, SignedIn, SignedOut, UserButton, useUser } from '@clerk/clerk-react';
 import { Notification } from './types';
 
 const Header: React.FC = () => {
     const navigate = useNavigate();
-    const { isSignedIn } = useUser();
+    const { isSignedIn, user } = useUser();
+    const isAdmin = (user?.publicMetadata as { role?: string })?.role === 'admin';
     const [headerSearchQuery, setHeaderSearchQuery] = useState('');
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
     const notificationsRef = useRef<HTMLDivElement>(null);
@@ -69,6 +71,11 @@ const Header: React.FC = () => {
 
                     <div className="flex items-center space-x-4">
                         <SignedIn>
+                            {isAdmin && (
+                                <Link to="/admin" className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-sky-400 transition-colors" title="Admin Panel">
+                                    <ShieldCheckIcon className="h-6 w-6" />
+                                </Link>
+                            )}
                             <div className="relative" ref={notificationsRef}>
                                 <button onClick={() => setNotificationsOpen(!isNotificationsOpen)} className="p-2 rounded-full hover:bg-gray-700 relative">
                                     <BellIcon className="h-6 w-6 text-gray-400"/>
@@ -123,6 +130,7 @@ const App: React.FC = () => {
               <Route path="/" element={<HomePage />} />
               <Route path="/ask" element={<AskQuestionPage />} />
               <Route path="/question/:id" element={<QuestionPage />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Routes>
           </main>
       </div>

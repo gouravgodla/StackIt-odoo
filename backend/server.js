@@ -1,8 +1,10 @@
+
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import connectDB from './config/db.js';
 import questionRoutes from './routes/questionRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 import { ClerkExpressWithAuth } from '@clerk/clerk-sdk-node';
 
 dotenv.config();
@@ -24,6 +26,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(ClerkExpressWithAuth());
 
 app.use('/api/questions', questionRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.get('/', (req, res) => {
     res.send('StackIt API is running...');

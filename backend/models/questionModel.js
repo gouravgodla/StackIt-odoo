@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const AuthorSchema = new mongoose.Schema({
@@ -24,6 +25,14 @@ const QuestionSchema = new mongoose.Schema({
   author: { type: AuthorSchema, required: true },
   answers: [AnswerSchema],
 }, { timestamps: true });
+
+// Create a text index for efficient searching on title, body, and tags
+QuestionSchema.index({
+    title: 'text',
+    body: 'text',
+    tags: 'text'
+});
+
 
 const Question = mongoose.model('Question', QuestionSchema);
 

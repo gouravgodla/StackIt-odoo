@@ -1,8 +1,8 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import 'react-quill/dist/quill.snow.css';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { HashRouter, useNavigate } from 'react-router-dom';
 

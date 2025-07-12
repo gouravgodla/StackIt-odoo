@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Question, Answer, VoteDirection, Author } from '../types';
 import { RichTextEditor } from './RichTextEditor';
-import { ChevronUpIcon, ChevronDownIcon, CheckIcon } from './icons';
+import { ChevronUpIcon, ChevronDownIcon, CheckIcon, TrashIcon } from './icons';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import * as apiService from '../services/apiService';
 
@@ -15,7 +15,10 @@ const AnswerComponent: React.FC<{
   onVote: (answerId: string, direction: 'up' | 'down') => Promise<void>;
   onAccept: (answerId: string) => Promise<void>;
   voteStatus: VoteDirection;
-}> = ({ answer, questionAuthorId, onVote, onAccept, voteStatus }) => {
+  isVoting: boolean;
+  isAdmin: boolean;
+  onDelete: (answerId: string) => Promise<void>;
+}> = ({ answer, questionAuthorId, onVote, onAccept, voteStatus, isVoting, isAdmin, onDelete }) => {
   const { user } = useUser();
 
   const handleAccept = () => {
@@ -24,6 +27,12 @@ const AnswerComponent: React.FC<{
     }
   };
   
+  const handleDelete = () => {
+      if (window.confirm('Are you sure you want to delete this answer? This action cannot be undone.')) {
+          onDelete(answer._id);
+      }
+  };
+
   const timeAgo = (dateStr: string): string => {
       const date = new Date(dateStr);
       const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -39,11 +48,11 @@ const AnswerComponent: React.FC<{
   return (
     <div className="flex gap-4 py-5 border-b border-gray-700">
       <div className="flex flex-col items-center flex-shrink-0 w-12 text-gray-400">
-        <button onClick={() => onVote(answer._id, 'up')} className={`p-1 rounded-full hover:bg-gray-700 ${voteStatus === VoteDirection.UP ? 'text-sky-500' : ''}`} aria-label="Upvote">
+        <button onClick={() => onVote(answer._id, 'up')} disabled={isVoting} className={`p-1 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-wait ${voteStatus === VoteDirection.UP ? 'text-sky-500' : ''}`} aria-label="Upvote">
           <ChevronUpIcon className="w-8 h-8"/>
         </button>
         <span className="text-xl font-bold my-1 text-white" aria-live="polite">{answer.votes}</span>
-        <button onClick={() => onVote(answer._id, 'down')} className={`p-1 rounded-full hover:bg-gray-700 ${voteStatus === VoteDirection.DOWN ? 'text-red-500' : ''}`} aria-label="Downvote">
+        <button onClick={() => onVote(answer._id, 'down')} disabled={isVoting} className={`p-1 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-wait ${voteStatus === VoteDirection.DOWN ? 'text-red-500' : ''}`} aria-label="Downvote">
           <ChevronDownIcon className="w-8 h-8"/>
         </button>
         {answer.isAccepted && (
@@ -54,6 +63,11 @@ const AnswerComponent: React.FC<{
          {user?.id === questionAuthorId && !answer.isAccepted && (
             <button onClick={handleAccept} className="mt-2 p-1 rounded-full border-2 border-gray-600 hover:border-green-500 hover:text-green-500" title="Accept this answer">
                 <CheckIcon className="w-6 h-6"/>
+            </button>
+        )}
+        {isAdmin && (
+            <button onClick={handleDelete} className="mt-3 p-1 rounded-full text-gray-500 hover:text-red-500 hover:bg-red-500/10" title="Admin: Delete Answer">
+                <TrashIcon className="w-5 h-5"/>
             </button>
         )}
       </div>
@@ -81,10 +95,11 @@ export const QuestionPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [newAnswerBody, setNewAnswerBody] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [voteStatus, setVoteStatus] = useState<VoteStatusMap>({});
+  const [votingOn, setVotingOn] = useState<string | null>(null);
   
   const { isSignedIn, getToken } = useAuth();
   const { user } = useUser();
+  const isAdmin = (user?.publicMetadata as { role?: string })?.role === 'admin';
   
   const fetchQuestion = useCallback(async () => {
     if (!id) return;
@@ -127,8 +142,9 @@ export const QuestionPage: React.FC = () => {
           alert("Please login to vote.");
           return;
       }
+      if (votingOn) return; // Prevent concurrent votes
 
-      // Optimistic UI update
+      setVotingOn(answerId);
       const originalQuestion = question;
       const updatedAnswers = question!.answers.map(ans => {
         if (ans._id === answerId) {
@@ -151,11 +167,13 @@ export const QuestionPage: React.FC = () => {
 
       try {
         const updatedQuestion = await apiService.voteOnAnswer({getToken}, question!._id, answerId, direction);
-        setQuestion(updatedQuestion); // Sync with the server state
+        setQuestion(updatedQuestion);
       } catch (err) {
         console.error(err);
-        setQuestion(originalQuestion); // Revert on error
+        setQuestion(originalQuestion); 
         alert('Failed to cast vote.');
+      } finally {
+        setVotingOn(null);
       }
   };
 
@@ -167,6 +185,31 @@ export const QuestionPage: React.FC = () => {
       } catch (err) {
         console.error(err);
         alert('Failed to accept answer.');
+      }
+  };
+  
+  const handleDeleteQuestion = async () => {
+      if (!isAdmin || !question) return;
+      if (window.confirm('Are you sure you want to PERMANENTLY DELETE this question and all its answers? This cannot be undone.')) {
+          try {
+              await apiService.deleteQuestion({ getToken }, question._id);
+              alert('Question deleted successfully.');
+              navigate('/');
+          } catch (err: any) {
+              console.error(err);
+              alert(err.message || 'Failed to delete question.');
+          }
+      }
+  };
+
+  const handleDeleteAnswer = async (answerId: string) => {
+      if (!isAdmin || !question) return;
+      try {
+          const updatedQuestion = await apiService.deleteAnswer({ getToken }, question._id, answerId);
+          setQuestion(updatedQuestion);
+      } catch (err: any) {
+          console.error(err);
+          alert(err.message || 'Failed to delete answer.');
       }
   };
 
@@ -222,11 +265,22 @@ export const QuestionPage: React.FC = () => {
                         <span key={tag} className="bg-gray-700 text-sky-300 text-xs font-semibold px-2.5 py-0.5 rounded-full">{tag}</span>
                     ))}
                 </div>
-                <div className="bg-sky-900/50 p-2 rounded-md text-sm text-sky-300 flex-shrink-0">
-                    <div className="text-gray-400 text-xs mb-1">asked {timeAgo(question.createdAt)}</div>
-                    <div className="flex items-center gap-2">
-                        <img src={question.author.avatarUrl} alt={question.author.name} className="w-6 h-6 rounded-full"/>
-                        <span>{question.author.name}</span>
+                 <div className="flex items-end gap-3">
+                    {isAdmin && (
+                        <button
+                            onClick={handleDeleteQuestion}
+                            className="bg-red-600/20 hover:bg-red-500/30 text-red-400 font-bold py-2 px-3 rounded-lg flex items-center gap-2 text-sm transition-colors"
+                            title="Admin: Delete Question"
+                        >
+                            <TrashIcon className="w-4 h-4" /> Delete
+                        </button>
+                    )}
+                    <div className="bg-sky-900/50 p-2 rounded-md text-sm text-sky-300 flex-shrink-0">
+                        <div className="text-gray-400 text-xs mb-1">asked {timeAgo(question.createdAt)}</div>
+                        <div className="flex items-center gap-2">
+                            <img src={question.author.avatarUrl} alt={question.author.name} className="w-6 h-6 rounded-full"/>
+                            <span>{question.author.name}</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -244,6 +298,9 @@ export const QuestionPage: React.FC = () => {
               onVote={handleVote}
               onAccept={handleAcceptAnswer}
               voteStatus={getVoteStatusForUser(answer)}
+              isVoting={votingOn === answer._id}
+              isAdmin={isAdmin}
+              onDelete={handleDeleteAnswer}
             />
           ))}
         </div>

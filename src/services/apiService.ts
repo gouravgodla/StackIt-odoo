@@ -1,5 +1,5 @@
 
-import { Question, Answer } from '../types';
+import { Question, Answer, AdminStats, ClerkUser } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -8,11 +8,11 @@ if (!API_URL) {
 }
 
 type ClerkAuth = {
-    getToken: (options: { template?: string }) => Promise<string | null>;
+    getToken: (options?: { template?: string }) => Promise<string | null>;
 };
 
 const getHeaders = async (auth: ClerkAuth) => {
-    const token = await auth.getToken({ template: 'default' });
+    const token = await auth.getToken();
     return {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
@@ -20,9 +20,30 @@ const getHeaders = async (auth: ClerkAuth) => {
 };
 
 // --- Questions API ---
+interface GetQuestionsParams {
+  page?: number;
+  limit?: number;
+  searchQuery?: string;
+  filter?: string;
+}
 
-export const getQuestions = async (searchQuery: string = ''): Promise<Question[]> => {
-    const response = await fetch(`${API_URL}/questions?q=${encodeURIComponent(searchQuery)}`);
+interface PaginatedQuestions {
+    questions: Question[];
+    page: number;
+    totalPages: number;
+    totalQuestions: number;
+}
+
+
+export const getQuestions = async (params: GetQuestionsParams): Promise<PaginatedQuestions> => {
+    const { page = 1, limit = 5, searchQuery = '', filter = 'Newest' } = params;
+    const query = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        q: searchQuery,
+        filter: filter
+    });
+    const response = await fetch(`${API_URL}/questions?${query.toString()}`);
     if (!response.ok) throw new Error('Failed to fetch questions');
     return response.json();
 };
@@ -89,5 +110,55 @@ export const acceptAnswer = async (
         headers: await getHeaders(auth)
     });
     if (!response.ok) throw new Error('Failed to accept answer');
+    return response.json();
+};
+
+// --- Admin API ---
+
+export const deleteQuestion = async (
+    auth: ClerkAuth,
+    questionId: string
+): Promise<void> => {
+    const response = await fetch(`${API_URL}/questions/${questionId}`, {
+        method: 'DELETE',
+        headers: await getHeaders(auth),
+    });
+    if (!response.ok) {
+        throw new Error('Failed to delete question. Admin permission required.');
+    }
+};
+
+export const deleteAnswer = async (
+    auth: ClerkAuth,
+    questionId: string,
+    answerId: string
+): Promise<Question> => {
+    const response = await fetch(`${API_URL}/questions/${questionId}/answers/${answerId}`, {
+        method: 'DELETE',
+        headers: await getHeaders(auth),
+    });
+    if (!response.ok) {
+        throw new Error('Failed to delete answer. Admin permission required.');
+    }
+    return response.json();
+};
+
+export const getAdminStats = async (auth: ClerkAuth): Promise<AdminStats> => {
+    const response = await fetch(`${API_URL}/admin/stats`, {
+        headers: await getHeaders(auth)
+    });
+    if (!response.ok) {
+        throw new Error('Failed to fetch admin stats. Admin permission required.');
+    }
+    return response.json();
+};
+
+export const getAdminUsers = async (auth: ClerkAuth): Promise<ClerkUser[]> => {
+    const response = await fetch(`${API_URL}/admin/users`, {
+        headers: await getHeaders(auth)
+    });
+    if (!response.ok) {
+        throw new Error('Failed to fetch users. Admin permission required.');
+    }
     return response.json();
 };

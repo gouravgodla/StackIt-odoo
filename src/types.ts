@@ -42,3 +42,26 @@ export enum VoteDirection {
   DOWN = 'down',
   NONE = 'none'
 }
+
+export interface AdminStats {
+  totalUsers: number;
+  totalQuestions: number;
+  totalAnswers: number;
+}
+
+// Represents the detailed user object from Clerk's backend API
+export interface ClerkUser {
+  id: string;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  imageUrl: string;
+  publicMetadata: {
+    role?: 'admin';
+  };
+  emailAddresses: {
+    id: string;
+    emailAddress: string;
+  }[];
+  createdAt: number; // timestamp
+}

@@ -1,21 +1,44 @@
+
 import Question from '../models/questionModel.js';
 import { clerkClient } from '@clerk/clerk-sdk-node';
 
-// @desc    Get all questions, with optional search
+// @desc    Get all questions, with optional search and pagination
 // @route   GET /api/questions
 // @access  Public
 export const getQuestions = async (req, res) => {
     try {
-        const keyword = req.query.q ? {
-            $or: [
-                { title: { $regex: req.query.q, $options: 'i' } },
-                { body: { $regex: req.query.q, $options: 'i' } },
-                { tags: { $regex: req.query.q, $options: 'i' } }
-            ]
-        } : {};
-        const questions = await Question.find({ ...keyword }).sort({ createdAt: -1 });
-        res.status(200).json(questions);
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 5;
+        const searchQuery = req.query.q || '';
+        const filter = req.query.filter || 'Newest';
+
+        let query = {};
+        
+        // Use text index for search if a query is provided
+        if (searchQuery) {
+            query.$text = { $search: searchQuery };
+        }
+        
+        // Add filter for unanswered questions
+        if (filter === 'Unanswered') {
+            query.answers = { $size: 0 };
+        }
+
+        const count = await Question.countDocuments(query);
+        const questions = await Question.find(query)
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .skip(limit * (page - 1));
+
+        res.status(200).json({
+            questions,
+            page,
+            totalPages: Math.ceil(count / limit),
+            totalQuestions: count
+        });
+
     } catch (error) {
+        console.error("Error in getQuestions:", error);
         res.status(500).json({ message: 'Server Error' });
     }
 };
@@ -192,6 +215,50 @@ export const acceptAnswer = async (req, res) => {
         res.status(200).json(question);
 
     } catch(error) {
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// @desc    Delete a question
+// @route   DELETE /api/questions/:id
+// @access  Private/Admin
+export const deleteQuestion = async (req, res) => {
+    try {
+        const question = await Question.findById(req.params.id);
+        if (!question) {
+            return res.status(404).json({ message: 'Question not found' });
+        }
+
+        await Question.deleteOne({ _id: req.params.id });
+
+        res.status(200).json({ message: 'Question removed' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// @desc    Delete an answer from a question
+// @route   DELETE /api/questions/:questionId/answers/:answerId
+// @access  Private/Admin
+export const deleteAnswer = async (req, res) => {
+    try {
+        const question = await Question.findById(req.params.questionId);
+        if (!question) {
+            return res.status(404).json({ message: 'Question not found' });
+        }
+
+        const answer = question.answers.id(req.params.answerId);
+        if (!answer) {
+            return res.status(404).json({ message: 'Answer not found' });
+        }
+
+        // Mongoose subdocuments have a remove() method.
+        await answer.deleteOne();
+        
+        await question.save();
+
+        res.status(200).json(question);
+    } catch (error) {
         res.status(500).json({ message: 'Server Error' });
     }
 };
